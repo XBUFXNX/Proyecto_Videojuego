@@ -1,0 +1,222 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <conio.h>
+#include <windows.h>
+#include <stdbool.h>
+#include <time.h>
+
+#define MAX_ALIENS 3
+#define ALIEN_WIDTH 1
+#define ALIEN_HEIGHT 1
+#define PLAYER_WIDTH 7
+#define PLAYER_HEIGHT 1
+#define PLAYER_BULLET '|'
+#define ALIEN_BULLET 'v'
+
+int playerX = 10, playerY = 20;
+int playerBulletX, playerBulletY;
+int alienX[MAX_ALIENS] = { 1, 6, 11 };
+int alienY = 5;
+int alienDirection[MAX_ALIENS] = { 1, 1, 1 };
+bool alienAlive[MAX_ALIENS] = { true, true, true };
+
+void gotoxy(int x, int y)
+{
+    COORD coord;
+    coord.X = x;
+    coord.Y = y;
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+}
+
+void drawPlayer(int x, int y)
+{
+    gotoxy(playerX, playerY);
+    printf("[-(°)-]");
+}
+
+void erasePlayer(int x, int y)
+{
+    gotoxy(playerX, playerY);
+    printf("       ");
+}
+
+void drawAlien(int index)
+{
+    gotoxy(alienX[index], alienY);
+    printf("[°]");
+}
+
+void eraseAlien(int index)
+{
+    gotoxy(alienX[index], alienY);
+    printf("   ");
+}
+
+void drawAliens()
+{
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (alienAlive[i]) {
+            drawAlien(i);
+        }
+    }
+}
+
+void eraseAliens()
+{
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (alienAlive[i]) {
+            eraseAlien(i);
+        }
+    }
+}
+
+int isCollision(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2)
+{
+    return (x1 <= x2 + width2 - 1 && x1 + width1 - 1 >= x2 &&
+            y1 <= y2 + height2 - 1 && y1 + height1 - 1 >= y2);
+}
+
+void eraseObject(int x, int y, int width)
+{
+    for (int i = 0; i < width; i++)
+    {
+        gotoxy(x + i, y);
+        printf(" ");
+    }
+}
+
+void drawBullet(int x, int y, char bullet)
+{
+    gotoxy(x, y);
+    printf("%c", bullet);
+}
+
+void eraseBullet(int x, int y)
+{
+    gotoxy(x, y);
+    printf(" ");
+}
+
+void movePlayer()
+{
+    if (_kbhit())
+    {
+        char move = _getch();
+        eraseObject(playerX, playerY, PLAYER_WIDTH);
+
+        if (move == 'a' && playerX > 1)
+        {
+            playerX--;
+        }
+        else if (move == 'd' && playerX < 30 - PLAYER_WIDTH)
+        {
+            playerX++;
+        }
+        else if (move == ' ')
+        {
+            playerBulletX = playerX + PLAYER_WIDTH / 2;
+            playerBulletY = playerY - 1;
+
+            while (playerBulletY > 0)
+            {
+                eraseBullet(playerBulletX, playerBulletY);
+                playerBulletY--;
+
+                for (int i = 0; i < MAX_ALIENS; i++) {
+                    if (alienAlive[i] && isCollision(playerBulletX, playerBulletY, 1, 1, alienX[i], alienY, ALIEN_WIDTH, ALIEN_HEIGHT))
+                    {
+                        eraseAlien(i);
+                        alienAlive[i] = false;
+                        gotoxy(alienX[i], alienY);
+                        printf("100P");
+                        Sleep(500);
+                        gotoxy(alienX[i], alienY);
+                        printf("    ");
+                        break;
+                    }
+                }
+
+                drawBullet(playerBulletX, playerBulletY, PLAYER_BULLET);
+                Sleep(10);
+            }
+
+            eraseBullet(playerBulletX, playerBulletY);
+        }
+    }
+
+    drawPlayer(playerX, playerY);
+}
+
+
+void moveAliens()
+{
+    eraseAliens();
+
+    for (int i = 0; i < MAX_ALIENS; i++) {
+        if (alienAlive[i]) {
+            eraseAlien(i);
+
+            alienX[i] += alienDirection[i];
+
+            // Si el alien alcanza los límites de movimiento, cambiar dirección
+            if (alienX[i] <= 1 || alienX[i] >= 30 - ALIEN_WIDTH) {
+                alienDirection[i] *= -1;
+            }
+        }
+    }
+
+    drawAliens();
+}
+
+int main()
+{
+	
+    while (1) {
+        movePlayer();
+        moveAliens();
+        Sleep(200);
+    }
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    // Registrar la clase de la ventana
+    WNDCLASSEX wc = {0};
+    wc.cbSize = sizeof(WNDCLASSEX);
+    wc.lpfnWndProc = WndProc;
+    wc.hInstance = hInstance;
+    wc.hIcon = LoadIcon(hInstance, "mi_icono.ico");
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.lpszClassName = "MiVentana";
+    RegisterClassEx(&wc);
+    
+    // Crear la ventana principal
+    HWND hwnd = CreateWindowEx(0, "MiVentana", "Mi Programa", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, NULL, NULL, hInstance, NULL);
+    
+    // Mostrar la ventana principal
+    ShowWindow(hwnd, nCmdShow);
+    UpdateWindow(hwnd);
+    
+    // Bucle de mensajes
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    
+    return (int)msg.wParam;
+}
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
+            
+        default:
+            return DefWindowProc(hwnd, msg, wParam, lParam);
+    }
+    
+    return 0;
+}
+return 0;
+}
