@@ -1,221 +1,425 @@
+#include <conio.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <conio.h>
-#include <windows.h>
-#include <stdbool.h>
 #include <time.h>
+#include <windows.h>
 
-#define MAX_ALIENS 3
-#define ALIEN_WIDTH 1
-#define ALIEN_HEIGHT 1
-#define PLAYER_WIDTH 7
-#define PLAYER_HEIGHT 1
-#define PLAYER_BULLET '|'
-#define ALIEN_BULLET 'v'
+#define MAX_ALIENS 6      // Cantidad maxima alien en pantalla.
+#define ALIEN_WIDTH 4     // Ancho de los aliens en pantalla.
+#define ALIEN_HEIGHT 1    // Altura de los aliens.
+#define PLAYER_WIDTH 7    // Ancho del Jugador
+#define PLAYER_HEIGHT 1   // Altura del Jugador
+#define PLAYER_BULLET '|' // Caracter que representa a la bala del jugador
+#define ALIEN_BULLET 'v'  // Caracter que repesenta a la bala de los aliens
 
-int playerX = 10, playerY = 20;
-int playerBulletX, playerBulletY;
-int alienX[MAX_ALIENS] = { 1, 6, 11 };
-int alienY = 5;
-int alienDirection[MAX_ALIENS] = { 1, 1, 1 };
-bool alienAlive[MAX_ALIENS] = { true, true, true };
+int playerX, playerY;             // Coordenadas x,y del Jugador.
+int playerBulletX, playerBulletY; // Coordenadas x,y de la bala del Jugador.
+int alienX[MAX_ALIENS];           // Array de coordenadas x de todos los aliens.
+int alienY[MAX_ALIENS];           // Array de coordenadas y de todos los aliens.
+int alienDirection[MAX_ALIENS];   // Array que almacena las direcciones de los
+                                  // aliens.
+bool alienAlive[MAX_ALIENS] = {
+    true, true, true,
+    true, true, true}; // Array que almacena el estado de los aliens.
+bool alienBulletActive[MAX_ALIENS] = {
+    false};                   // Array que almacena si un alien disparo o no.
+int alienBulletX[MAX_ALIENS]; // Array de coordenadas x de las balas de alien.
+int alienBulletY[MAX_ALIENS]; // Array de coordenadas x de las balas de alien.
+int score = 0;                // Puntuacion del jugador
+int consoleWidth, consoleHeight; // Ancho y largo de la consola
+int gameWidth, gameHeight;       // Ancho y largo del juego
+clock_t previousFrameTime;       // Velocidad del frecio anterior
 
-void gotoxy(int x, int y)
-{
-    COORD coord;
-    coord.X = x;
-    coord.Y = y;
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+// Función para obtener el tiempo en milisegundos
+double getElapsedTime() {
+  return (double)(clock() - previousFrameTime) * 1000 / CLOCKS_PER_SEC;
 }
 
-void drawPlayer(int x, int y)
-{
-    gotoxy(playerX, playerY);
-    printf("[-(°)-]");
+// Funcion para posicionar objetos en el eje x,y
+void gotoxy(int x, int y) {
+  COORD coord; // Structura de coordenadas
+  coord.X = x; // eje x
+  coord.Y = y; // eje y
+  SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE),
+                           coord); // Posiciona el cursor en la consola
 }
 
-void erasePlayer(int x, int y)
-{
-    gotoxy(playerX, playerY);
-    printf("       ");
+// Funcion de imprimir Player
+void drawPlayer(int x, int y) {
+  gotoxy(playerX, playerY);
+  printf("\033[0;32m[-(+)-]\033[0m\n");
 }
 
-void drawAlien(int index)
-{
-    gotoxy(alienX[index], alienY);
-    printf("[°]");
+// Funcion de borrar Player
+void erasePlayer(int x, int y) {
+  gotoxy(playerX, playerY);
+  printf("       ");
 }
 
-void eraseAlien(int index)
-{
-    gotoxy(alienX[index], alienY);
+// Funcion de imprimir Alien
+void drawAlien(int index) {
+  gotoxy(alienX[index], alienY[index]);
+  printf("\033[0;35m[-]\033[0m\n");
+}
+
+// Funcion de borrar Alien
+void eraseAlien(int index) {
+  if (alienAlive[index]) {
+    gotoxy(alienX[index], alienY[index]);
     printf("   ");
+  }
 }
 
-void drawAliens()
-{
-    for (int i = 0; i < MAX_ALIENS; i++) {
-        if (alienAlive[i]) {
-            drawAlien(i);
-        }
+// Funcion de Imprimir todos los aliens
+void drawAliens() {
+  for (int i = 0; i < MAX_ALIENS; i++) {
+    if (alienAlive[i]) {
+      drawAlien(i);
     }
+  }
 }
 
-void eraseAliens()
-{
-    for (int i = 0; i < MAX_ALIENS; i++) {
-        if (alienAlive[i]) {
-            eraseAlien(i);
-        }
+// Fucion de borrar Todos los aliens
+void eraseAliens() {
+  for (int i = 0; i < MAX_ALIENS; i++) {
+    if (alienAlive[i]) {
+      eraseAlien(i);
     }
+  }
 }
 
-int isCollision(int x1, int y1, int width1, int height1, int x2, int y2, int width2, int height2)
-{
-    return (x1 <= x2 + width2 - 1 && x1 + width1 - 1 >= x2 &&
-            y1 <= y2 + height2 - 1 && y1 + height1 - 1 >= y2);
+// Funcion para definir coliciones
+int isCollision(int x1, int y1, int width1, int height1, int x2, int y2,
+                int width2, int height2) {
+  return (x1 <= x2 + width2 - 1 && x1 + width1 - 1 >= x2 &&
+          y1 <= y2 + height2 - 1 && y1 + height1 - 1 >= y2);
 }
 
-void eraseObject(int x, int y, int width)
-{
-    for (int i = 0; i < width; i++)
-    {
-        gotoxy(x + i, y);
-        printf(" ");
-    }
-}
-
-void drawBullet(int x, int y, char bullet)
-{
-    gotoxy(x, y);
-    printf("%c", bullet);
-}
-
-void eraseBullet(int x, int y)
-{
-    gotoxy(x, y);
+// Funcion Borrar objetos
+void eraseObject(int x, int y, int width) {
+  for (int i = 0; i < width; i++) {
+    gotoxy(x + i, y);
     printf(" ");
+  }
 }
 
-void movePlayer()
-{
-    if (_kbhit())
-    {
-        char move = _getch();
-        eraseObject(playerX, playerY, PLAYER_WIDTH);
+// Funcion imprimir Bullet
+void drawBullet(int x, int y, char bullet) {
+  gotoxy(x, y);
+  if (bullet == ALIEN_BULLET) {
+    printf("\033[0;35m%c\033[0m\n", bullet);
+  } else if (bullet == PLAYER_BULLET) {
+    printf("\033[0;32m%c\033[0m\n", bullet);
+  }
+}
 
-        if (move == 'a' && playerX > 1)
-        {
-            playerX--;
-        }
-        else if (move == 'd' && playerX < 30 - PLAYER_WIDTH)
-        {
-            playerX++;
-        }
-        else if (move == ' ')
-        {
-            playerBulletX = playerX + PLAYER_WIDTH / 2;
-            playerBulletY = playerY - 1;
+// Funcion borrar Bullet
+void eraseBullet(int x, int y) {
+  gotoxy(x, y);
+  printf(" ");
+}
 
-            while (playerBulletY > 0)
-            {
-                eraseBullet(playerBulletX, playerBulletY);
-                playerBulletY--;
+// Dibujar Marco
+void drawFrame() {
+  // Dibujar el marco superior
+  gotoxy((consoleWidth - gameWidth) / 2, 0);
+  for (int i = 0; i < gameWidth; i++)
+    printf("*");
 
-                for (int i = 0; i < MAX_ALIENS; i++) {
-                    if (alienAlive[i] && isCollision(playerBulletX, playerBulletY, 1, 1, alienX[i], alienY, ALIEN_WIDTH, ALIEN_HEIGHT))
-                    {
-                        eraseAlien(i);
-                        alienAlive[i] = false;
-                        gotoxy(alienX[i], alienY);
-                        printf("100P");
-                        Sleep(500);
-                        gotoxy(alienX[i], alienY);
-                        printf("    ");
-                        break;
-                    }
-                }
+  // Dibujar el marco inferior
+  gotoxy((consoleWidth - gameWidth) / 2, gameHeight + 1);
+  for (int i = 0; i < gameWidth; i++)
+    printf("*");
 
-                drawBullet(playerBulletX, playerBulletY, PLAYER_BULLET);
-                Sleep(10);
-            }
+  // Dibujar los bordes laterales
+  for (int i = 1; i < gameHeight + 1; i++) {
+    gotoxy((consoleWidth - gameWidth) / 2, i);
+    printf("|");
+    gotoxy((consoleWidth + gameWidth) / 2, i);
+    printf("|");
+  }
 
-            eraseBullet(playerBulletX, playerBulletY);
-        }
+  gotoxy((consoleWidth - gameWidth) / 2 + 35, (gameHeight / 2));
+  printf("[MOVIMIENT0]");
+  gotoxy((consoleWidth - gameWidth) / 2 + 35, (gameHeight / 2 + 1));
+  printf("Izquierda -A-");
+  gotoxy((consoleWidth - gameWidth) / 2 + 35, (gameHeight / 2 + 2));
+  printf("Derecha   -D-");
+  gotoxy((consoleWidth - gameWidth) / 2 + 35, (gameHeight / 2 + 3));
+  printf("Disparo   -Espacio-");
+}
+
+// Funcion imprimir score
+void printScore() {
+  gotoxy((consoleWidth - gameWidth) / 2 + 2, gameHeight + 2);
+  printf("\033[0;33mPuntuacion: %d\033[0m\n", score);
+}
+
+// Funcion Posicion inicial aliens
+void PosicionAliens() {
+  // Calcular las posiciones iniciales de los aliens
+  for (int i = 0; i < MAX_ALIENS; i++) {
+    alienX[i] = rand() % (gameWidth - ALIEN_WIDTH + 1) +
+                ((consoleWidth - gameWidth) / 2 +
+                 1); // Posicion inicial aleatoria en el eje X
+    alienY[i] = rand() % (gameHeight - ALIEN_HEIGHT - 10) +
+                2;         // Posicion inicial aleatoria en el eje Y
+    alienDirection[i] = 1; // Direccion inicial
+    alienAlive[i] = true;  // Todos los aliens estan vivos al inicio
+    alienBulletActive[i] =
+        false; // Desactivar los disparos de los aliens al inicio
+  }
+}
+
+// Funcion incrementar score
+void increaseScore(int alienIndex) {
+  score += 100;
+  printScore();
+
+  gotoxy(alienX[alienIndex], alienY[alienIndex]);
+  printf("\033[0;33m100P\033[0m\n");
+  Beep(100, 200);
+  gotoxy(alienX[alienIndex], alienY[alienIndex]);
+  printf("    ");
+
+  bool allAliensDestroyed = true;
+  for (int i = 0; i < MAX_ALIENS; i++) {
+    if (alienAlive[i]) {
+      allAliensDestroyed = false;
+      break;
     }
+  }
 
-    drawPlayer(playerX, playerY);
-}
-
-
-void moveAliens()
-{
-    eraseAliens();
-
+  if (allAliensDestroyed) {
     for (int i = 0; i < MAX_ALIENS; i++) {
-        if (alienAlive[i]) {
-            eraseAlien(i);
+      alienAlive[i] = true;
+    }
+    PosicionAliens();
+  }
+}
 
-            alienX[i] += alienDirection[i];
+// Funcion gameover
+void gameOver() {
+  system("cls");
+  gotoxy(consoleWidth / 2 - 5, gameHeight / 2);
+  printf("\033[0;31mGame Over!\033[0m\n");
+  gotoxy(consoleWidth / 2 - 8, gameHeight / 2 + 2);
+  printf("Puntuacion final:%d", score);
+  Sleep(2000);
+  exit(0);
+}
 
-            // Si el alien alcanza los límites de movimiento, cambiar dirección
-            if (alienX[i] <= 1 || alienX[i] >= 30 - ALIEN_WIDTH) {
-                alienDirection[i] *= -1;
-            }
+// Funcion mover Alien Bullet
+void moveAlienBullets() {
+  for (int i = 0; i < MAX_ALIENS; i++) {
+    if (alienBulletActive[i]) {
+      eraseBullet(alienBulletX[i], alienBulletY[i]);
+      alienBulletY[i]++;
+      for (int i = 0; i < MAX_ALIENS; i++) {
+        if (alienBulletActive[i]) {
+          eraseBullet(alienBulletX[i], alienBulletY[i]);
+          alienBulletY[i]++;
+
+          // Comprobar si el disparo del alien colisiona con el jugador
+          if (isCollision(alienBulletX[i], alienBulletY[i], 1, 1, playerX,
+                          playerY, PLAYER_WIDTH, PLAYER_HEIGHT)) {
+            gameOver();
+          }
         }
+        // Comprobar si el disparo del alien colisiona con el suelo
+        if (alienBulletY[i] >= gameHeight) {
+          alienBulletActive[i] = false;
+        } else {
+          drawBullet(alienBulletX[i], alienBulletY[i], ALIEN_BULLET);
+          Sleep(10);
+        }
+      }
+    } else {
+      // Activar aleatoriamente el disparo del alien
+      if (rand() % 1000 < 5) {
+        alienBulletActive[i] = true;
+        alienBulletX[i] = alienX[i] + ALIEN_WIDTH / 2;
+        alienBulletY[i] = alienY[i] + ALIEN_HEIGHT + 1;
+      }
     }
-
-    drawAliens();
+  }
 }
 
-int main()
-{
-	
-    while (1) {
-        movePlayer();
-        moveAliens();
-        Sleep(200);
-    }
-LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+// Funcion mover Aliens
+void moveAliens() {
+  eraseAliens();
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    // Registrar la clase de la ventana
-    WNDCLASSEX wc = {0};
-    wc.cbSize = sizeof(WNDCLASSEX);
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = hInstance;
-    wc.hIcon = LoadIcon(hInstance, "mi_icono.ico");
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.lpszClassName = "MiVentana";
-    RegisterClassEx(&wc);
-    
-    // Crear la ventana principal
-    HWND hwnd = CreateWindowEx(0, "MiVentana", "Mi Programa", WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, NULL, NULL, hInstance, NULL);
-    
-    // Mostrar la ventana principal
-    ShowWindow(hwnd, nCmdShow);
-    UpdateWindow(hwnd);
-    
-    // Bucle de mensajes
-    MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+  for (int i = 0; i < MAX_ALIENS; i++) {
+    if (alienAlive[i] == true) {
+      eraseAlien(i);
+
+      // Mover el alien en el eje X
+      alienX[i] += alienDirection[i];
+
+      // Si el alien alcanza los limites de movimiento, cambiar direccion
+      if (alienX[i] <= ((consoleWidth - gameWidth) / 2) + 1 ||
+          alienX[i] >= ((consoleWidth + gameWidth) / 2) - ALIEN_WIDTH) {
+        alienDirection[i] *= -1;
+      }
+
+      // Disparar aleatoriamente desde el alien
+      if (!alienBulletActive[i] && rand() % 1000 < 10) {
+        alienBulletActive[i] = true;
+        alienBulletX[i] = alienX[i] + ALIEN_WIDTH / 2;
+        alienBulletY[i] = alienY[i] + ALIEN_HEIGHT + 1;
+      }
     }
-    
-    return (int)msg.wParam;
+  }
+
+  drawAliens();
+  // Calcular el tiempo transcurrido en el fotograma actual
+  double elapsedTime = getElapsedTime();
+
+  // Retardo para mantener 30 FPS
+  if (elapsedTime < 1000.0 / 30) {
+    Sleep(1000.0 / 30 - elapsedTime);
+  }
+
+  // Actualizar el tiempo del fotograma anterior
+  previousFrameTime = clock();
 }
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
-        case WM_DESTROY:
-            PostQuitMessage(0);
+// Funcion inicializar juego
+void inicializarJuego() {
+  // Obtener el tama?o de la consola
+  CONSOLE_SCREEN_BUFFER_INFO csbi;
+  GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+  consoleWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+  consoleHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+
+  // Calcular el tama?o del juego
+  gameWidth = 32;
+  gameHeight = 22;
+
+  // Calcular la posicion inicial del jugador
+  playerX = (consoleWidth - gameWidth) / 2 + (gameWidth - PLAYER_WIDTH) / 2;
+  playerY = gameHeight - 1;
+
+  // Calcular la posicion inicial de la bala del jugador
+  playerBulletX = playerX + PLAYER_WIDTH / 2;
+  playerBulletY = playerY - 1;
+
+  // Inicializar la semilla para generar numeros aleatorios
+  srand((unsigned)time(NULL));
+
+  PosicionAliens();
+
+  // Dibujar el marco y el jugador
+  system("cls");
+  drawFrame();
+  drawPlayer(playerX, playerY);
+  printScore();
+}
+
+// Funcion Mover Player y Bullet
+void movePlayer() {
+  if (_kbhit()) {
+    char move = _getch();
+    erasePlayer(playerX, playerY);
+
+    if (move == 'a' && playerX > ((consoleWidth - gameWidth) / 2) + 1) {
+      playerX--;
+    } else if (move == 'd' &&
+               playerX < ((consoleWidth + gameWidth) / 2) - PLAYER_WIDTH) {
+      playerX++;
+    } else if (move == ' ') {
+      eraseBullet(playerBulletX, playerBulletY);
+      playerBulletX = playerX + PLAYER_WIDTH / 2;
+      playerBulletY = playerY - 1;
+
+      while (playerBulletY > 1) {
+        eraseBullet(playerBulletX, playerBulletY); // Borrar la bala anterior
+
+        playerBulletY--;
+
+        for (int i = 0; i < MAX_ALIENS; i++) {
+          if (alienAlive[i] &&
+              isCollision(playerBulletX, playerBulletY, 1, 1, alienX[i],
+                          alienY[i], ALIEN_WIDTH, ALIEN_HEIGHT)) {
+            eraseAlien(i);
+            alienAlive[i] = false;
+            increaseScore(i);
             break;
-            
-        default:
-            return DefWindowProc(hwnd, msg, wParam, lParam);
+          }
+        }
+
+        drawBullet(playerBulletX, playerBulletY, PLAYER_BULLET);
+        moveAlienBullets();
+        moveAliens();
+        movePlayer();
+        // Calcular el tiempo transcurrido en el fotograma actual
+        double elapsedTime = getElapsedTime();
+
+        // Retardo para mantener 30 FPS
+        if (elapsedTime < 1000.0 / 30) {
+          Sleep(1000.0 / 30 - elapsedTime);
+        }
+
+        // Actualizar el tiempo del fotograma anterior
+        previousFrameTime = clock();
+      }
+
+      eraseBullet(playerBulletX, playerBulletY);
     }
-    
+  }
+
+  drawPlayer(playerX, playerY);
+}
+
+// Funcion del Ciclo de juego
+void CicloJuego() {
+  inicializarJuego();
+
+  while (true) {
+    movePlayer();
+    moveAliens();
+    moveAlienBullets();
+
+    // Calcular el tiempo transcurrido en el fotograma actual
+    double elapsedTime = getElapsedTime();
+
+    // Retardo para mantener 30 FPS
+    if (elapsedTime < 1000.0 / 30) {
+      Sleep(1000.0 / 30 - elapsedTime);
+    }
+
+    // Actualizar el tiempo del fotograma anterior
+    previousFrameTime = clock();
+  }
+}
+
+// Funcion Principal
+int main() {
+  system("cls");
+  printf("MENU\n");
+  printf("1. Comenzar juego\n");
+  printf("2. Ver registros\n");
+
+  char opcion = '\0';
+  while (opcion != '1' && opcion != '2') {
+    if (_kbhit()) {
+      opcion = _getch();
+
+      if (opcion == '1') {
+        CicloJuego();
+      } else if (opcion == '2') {
+        printf("No hay registros disponibles.\n (Lo lamento no llegamos)");
+        Sleep(2000);
+      } else {
+        printf("Opcion invalida, ingrese 1 o 2.\n");
+      }
+    }
+  }
+
+  return 0;
+}
+
     return 0;
 }
 return 0;
